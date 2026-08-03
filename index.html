@@ -106,6 +106,16 @@
   .row .lbl small{display:block;font-size:11px;font-weight:600;color:var(--muted)}
   .dfoot{padding:12px 16px calc(var(--safe-b) + 14px);border-top:1px solid #3a2f27;
     font-size:11px;color:var(--muted);line-height:1.6}
+  .a2hs{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 84px);z-index:30;
+    display:flex;align-items:center;gap:11px;background:#241d18;border:1px solid #3a2f27;
+    border-radius:16px;padding:11px 13px;box-shadow:0 12px 34px #000a;color:var(--cream)}
+  .a2hs[hidden]{display:none}
+  .a2hs .ic{width:38px;height:38px;border-radius:9px;background:#fff;object-fit:contain;flex:0 0 auto}
+  .a2hs .tx{flex:1;font-size:13px;line-height:1.5}
+  .a2hs .tx b{color:#fff}
+  .a2hs .go{border:none;border-radius:999px;background:#e2231a;color:#fff;font-weight:700;
+    padding:9px 15px;font-size:14px;cursor:pointer;flex:0 0 auto}
+  .a2hs .x{border:none;background:transparent;color:#c9b79a;font-size:17px;cursor:pointer;flex:0 0 auto;padding:4px}
 </style>
 </head>
 <body>
@@ -140,6 +150,12 @@
     </div>
     <div class="dlist" id="dlist"></div>
     <div class="dfoot">כלי תזכורת בלבד — אינו הנחיית טיפול. פעל לפי הנחיות מד״א העדכניות.</div>
+  <div class="a2hs" id="a2hs" hidden>
+    <img class="ic" src="icons/icon-192.png" alt="">
+    <div class="tx" id="a2hsTx"></div>
+    <button class="go" id="a2hsGo" hidden>התקן</button>
+    <button class="x" id="a2hsX" aria-label="סגור">✕</button>
+  </div>
   </aside>
 </div>
 
@@ -272,6 +288,29 @@ window.addEventListener('keydown',e=>{
 
 /* start on card 1 */
 render();
+
+/* ---- Install prompt (Add to Home Screen) ---- */
+(function(){
+  var a2hs=$('a2hs'), tx=$('a2hsTx'), go=$('a2hsGo');
+  var standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  var ua = navigator.userAgent || '';
+  var isiOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var off = false; try { off = localStorage.getItem('a2hs-off') === '1'; } catch(e){}
+  var deferred = null;
+  function show(html, withBtn){ tx.innerHTML = html; go.hidden = !withBtn; a2hs.hidden = false; }
+  function hide(){ a2hs.hidden = true; }
+  $('a2hsX').onclick = function(){ hide(); try { localStorage.setItem('a2hs-off','1'); } catch(e){} };
+  go.onclick = function(){ if(!deferred) return; deferred.prompt(); if(deferred.userChoice){ deferred.userChoice.then(function(){}); } deferred = null; hide(); };
+  window.addEventListener('appinstalled', hide);
+  if(standalone || off) return;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault(); deferred = e;
+    show('התקינו את <b>כרטיס כיס לחובש</b> כאפליקציה במסך הבית.', true);
+  });
+  if(isiOS){
+    show('להתקנה ב־iPhone: פתחו ב־<b>Safari</b>, הקישו על <b>שיתוף</b> ⬆︎ ואז <b>"הוספה למסך הבית"</b>.', false);
+  }
+})();
 
 /* ---- PWA: register service worker ---- */
 if('serviceWorker' in navigator){
