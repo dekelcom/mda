@@ -1,7 +1,7 @@
 // כרטיס כיס לחובש — offline service worker
-const CACHE = 'kartis-kis-lahovesh-v1';
+const CACHE = 'kartis-kis-lahovesh-v2';
 const ASSETS = [
-  '.', 'index.html', 'manifest.webmanifest',
+  '.', 'index.html', 'anamnesis.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png', 'icons/favicon-32.png', 'icons/logo.png'
 ];
 
