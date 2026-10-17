@@ -525,7 +525,7 @@ const rows=[...dlist.children];
   }
   $('anamCopy').onclick=copyText;
   $('anamShare').onclick=async()=>{ if(navigator.share){ try{ await navigator.share({text:out.value}); }catch(e){} } else copyText(); };
-  $('anamReset').onclick=()=>{ if(!cur) return; st=fresh(cur); try{ localStorage.removeItem(KEY(cur)); }catch(e){} render(); toast('אופס'); };
+  $('anamReset').onclick=()=>{ if(!cur) return; if(!confirm('למחוק את האנמנזה של "'+cur.title+'" ולהתחיל מחדש?')) return; st=fresh(cur); try{ localStorage.removeItem(KEY(cur)); }catch(e){} render(); toast('אופס'); };
   $('anamBack').onclick=()=>{ if(cur) showList(); else hide(); };
   window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!anam.hidden){ e.stopImmediatePropagation(); if(cur) showList(); else hide(); } },true);
 })();
