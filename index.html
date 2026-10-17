@@ -319,7 +319,10 @@ const rows=[...dlist.children];
   function autoGrow(){ out.style.height='auto'; out.style.height=(out.scrollHeight+2)+'px'; }
   let cur=null, st=null;
   const KEY=t=>'anam-state-'+t.id;
-  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:'',fill:{}});
+  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:'',fill:{},pick:{}});
+  // apply picked values to the opening's [placeholders]; keeps the bracket in st.open so more values can be added later
+  function applyPicks(txt){ Object.keys(st.pick||{}).forEach(n=>{ const v=st.pick[n]; if(v&&v.length) txt=txt.replace('['+n+']', joinHe(v)); }); return txt; }
+  function unapplyPicks(txt){ Object.keys(st.pick||{}).forEach(n=>{ const v=st.pick[n]; if(v&&v.length) txt=txt.replace(joinHe(v), '['+n+']'); }); return txt; }
   // options for a [placeholder] inside a phrase, by event type then global
   function optsFor(name){ const o=A.options||{}; return (o.byType&&o.byType[cur.id]&&o.byType[cur.id][name]) || (o.global&&o.global[name]) || null; }
   // options for any [placeholder] text: exact list by name, else "name: a, b", else "a / b", else "a, b", else none (free text only)
@@ -399,6 +402,7 @@ const rows=[...dlist.children];
     if(!cur||!st) return '';
     let open=st.open||'';
     const who=whoStr();
+    open=applyPicks(open).replace(/(^|\s)([בלמ])-(?=[א-ת])/g,'$1$2');   // "ב-מרכז החזה" -> "במרכז החזה" (hyphen kept before digits/brackets)
     open=open.replace(/\[גבר\/אישה\]\s*\[גיל\]/g, who);
     if(st.age!=null) open=open.replace(/\[גיל\]/g, String(st.age));
     const parts=[conj(open.trim(),st.sex)];
@@ -432,8 +436,9 @@ const rows=[...dlist.children];
     const seen=new Set();
     (st.open.match(/\[([^\]]+)\]/g)||[]).map(x=>x.slice(1,-1)).forEach(name=>{
       if(name==='גבר/אישה'||name==='גיל'||seen.has(name)) return; seen.add(name);
-      const put=v=>{ st.open=st.open.replace('['+name+']', v); render(); };
-      phRows.appendChild(optionRow(name, [], put, put, '['+name+']'));
+      const chosen=st.pick[name]||[];
+      const toggle=v=>{ const arr=st.pick[name]||(st.pick[name]=[]); const i=arr.indexOf(v); i>=0?arr.splice(i,1):arr.push(v); render(); };
+      phRows.appendChild(optionRow(name, chosen, toggle, toggle, '['+name+']'));
     });
     $('phBlock').hidden=!phRows.children.length;
     // placeholders inside selected phrases
@@ -487,7 +492,9 @@ const rows=[...dlist.children];
     else if(!c.gen) open=v;
     else { open=v; st.sel={}; st.fill={}; st.bp=''; st.pulse=''; st.glu=''; }
     // keep sex/age live: put the placeholder back where the generated "גבר בן 55" sits
-    st.open=open.replace(whoStr(),'[גבר/אישה] [גיל]');
+    st.open=unapplyPicks(open.replace(whoStr(),'[גבר/אישה] [גיל]'));
+    // a placeholder the user deleted by hand no longer takes picks
+    Object.keys(st.pick).forEach(n=>{ if(!st.open.includes('['+n+']')) delete st.pick[n]; });
     // keep the editable placeholders readable: don't re-conjugate text the user typed
     render();
   });
