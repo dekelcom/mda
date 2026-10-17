@@ -351,7 +351,7 @@ const rows=[...dlist.children];
     if(sys>=120||dia>=80) return 'גבולי';
     return 'תקין';
   }
-  function gluLabel(v){ const a=ageY(); const lo=a<1?45:70; return v<lo ? 'נמוך' : v>200 ? 'גבוה' : v>140 ? 'מוגבר' : 'תקין'; }
+  function gluLabel(v){ return v<70 ? 'נמוך, שים לב, חשד להיפוגליקמיה' : v>224 ? 'גבוה, שים לב, חשד להיפרגליקמיה' : v>140 ? 'מוגבר' : 'תקין'; }
   function withLabel(txt,lab){ return lab ? txt+' ('+lab+')' : txt; }
   function compose(){
     if(!cur||!st) return '';
