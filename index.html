@@ -154,6 +154,25 @@
   .chip:active{background:#ffffff1a}
   .chip.used{background:#a4131f;border-color:#a4131f;color:#fff}
   .anote{font-size:11px;color:var(--muted);line-height:1.6;text-align:center;padding-top:4px}
+  .preview{position:sticky;top:-10px;z-index:3;background:var(--bg);padding:10px 0 8px;margin:-10px 0 0;
+    border-bottom:1px solid #3a2f27;display:flex;flex-direction:column;gap:8px}
+  .preview textarea{min-height:92px;max-height:34vh;background:#241d18;border-color:#4a3c32}
+  .fld{display:flex;flex-direction:column;gap:7px}
+  .flbl{font-size:11.5px;font-weight:700;color:var(--muted);margin:2px 2px 0}
+  .flbl small{font-weight:500;opacity:.8}
+  .fld textarea{min-height:0}
+  .pbar{display:flex;gap:8px;align-items:stretch}
+  .seg{display:flex;flex:1;border:1px solid #3a2f27;border-radius:999px;overflow:hidden;background:#1c1611}
+  .seg button{flex:1;border:none;background:transparent;color:var(--cream);font:inherit;font-size:14px;font-weight:700;
+    height:44px;cursor:pointer}
+  .seg button.on{background:#a4131f;color:#fff}
+  .agebox{display:flex;flex:1;border:1px solid #3a2f27;border-radius:999px;overflow:hidden;background:#1c1611}
+  .agebox button{width:44px;border:none;background:transparent;color:#fff;font-size:22px;cursor:pointer;flex:0 0 auto}
+  .agebox button:active{background:#ffffff1a}
+  .agebox input{flex:1;min-width:0;border:none;background:transparent;color:var(--cream);font:inherit;font-size:16px;
+    font-weight:800;text-align:center;outline:none;-webkit-user-select:text;user-select:text;-moz-appearance:textfield}
+  .agebox input::-webkit-outer-spin-button,.agebox input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .agechips .chip{padding:6px 11px;font-size:12.5px}
 </style>
 </head>
 <body>
@@ -188,14 +207,38 @@
     <div class="abody">
       <div class="alist" id="anamList"></div>
       <div class="adetail" id="anamDetail" hidden>
-        <textarea id="anamText" spellcheck="false"></textarea>
-        <div class="acts">
-          <button class="pri" id="anamCopy">העתק</button>
-          <button id="anamShare">שתף</button>
-          <button id="anamReset">איפוס</button>
+        <div class="preview">
+          <textarea id="anamText" readonly spellcheck="false"></textarea>
+          <div class="acts">
+            <button class="pri" id="anamCopy">העתק</button>
+            <button id="anamShare">שתף</button>
+            <button id="anamReset">איפוס</button>
+          </div>
+        </div>
+        <div class="fld">
+          <div class="flbl">מטופל</div>
+          <div class="pbar">
+            <div class="seg" id="sexSeg">
+              <button data-s="m">גבר</button><button data-s="f">אישה</button>
+            </div>
+            <div class="agebox">
+              <button id="ageMinus" aria-label="פחות">−</button>
+              <input id="ageIn" type="number" inputmode="numeric" min="0" max="120" placeholder="גיל">
+              <button id="agePlus" aria-label="יותר">+</button>
+            </div>
+          </div>
+          <div class="chips agechips" id="ageChips"></div>
+        </div>
+        <div class="fld">
+          <div class="flbl">פתיחה <small>ניתן לערוך, סוגריים מרובעים הם שדות למילוי</small></div>
+          <textarea id="anamOpen" rows="3" spellcheck="false"></textarea>
         </div>
         <div id="anamChips"></div>
-        <div class="anote">לחיצה על משפט מוסיפה אותו לטקסט. סוגריים מרובעים הם שדות למילוי. הטיוטה נשמרת במכשיר.</div>
+        <div class="fld">
+          <div class="flbl">הערות נוספות</div>
+          <textarea id="anamNotes" rows="2" spellcheck="false" placeholder="טקסט חופשי שיתווסף בסוף"></textarea>
+        </div>
+        <div class="anote">לחיצה על משפט מוסיפה אותו למקום שלו בדו"ח, לחיצה נוספת מסירה. הטיוטה נשמרת במכשיר.</div>
       </div>
     </div>
   </section>
@@ -249,21 +292,66 @@ const rows=[...dlist.children];
 /* ---- anamnesis snippet library (drawer section + screen) ---- */
 (function(){
   const A=window.ANAMNESIS; if(!A) return;
-  const anam=$('anam'), list=$('anamList'), det=$('anamDetail'), ta=$('anamText'), chipsEl=$('anamChips');
-  let cur=null;
-  const key=t=>'anam-draft-'+t.id;
-  const load=t=>{ try{ return localStorage.getItem(key(t)); }catch(e){ return null; } };
-  const save=()=>{ if(!cur) return; try{ localStorage.setItem(key(cur), ta.value); }catch(e){} };
+  const anam=$('anam'), list=$('anamList'), det=$('anamDetail'), out=$('anamText'), chipsEl=$('anamChips');
+  const openEl=$('anamOpen'), notesEl=$('anamNotes'), ageIn=$('ageIn'), sexSeg=$('sexSeg'), ageChips=$('ageChips');
+  let cur=null, st=null;
+  const KEY=t=>'anam-state-'+t.id;
+  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{}});
+  function load(t){ try{ const j=JSON.parse(localStorage.getItem(KEY(t))||'null'); if(j&&typeof j==='object') return Object.assign(fresh(t),j); }catch(e){} return fresh(t); }
+  function save(){ if(cur&&st) try{ localStorage.setItem(KEY(cur),JSON.stringify(st)); }catch(e){} }
 
-  // drawer: section header + one row per event type
+  /* --- Hebrew helpers --- */
+  // "נוטל/ת" -> m:"נוטל" f:"נוטלת"; "שתה/שתתה" -> m:"שתה" f:"שתתה"; "[גבר/אישה]" -> "גבר"/"אישה"
+  function conj(txt,sex){
+    if(!sex) return txt;
+    txt=txt.replace(/\[גבר\/אישה\]/g, sex==='m'?'גבר':'אישה');
+    // conjugate only outside [placeholders], so "[ריאתי/לבבי]" stays a fill-in choice
+    return txt.split(/(\[[^\]]*\])/).map((seg,i)=> i%2 ? seg : seg.replace(/([א-ת]+)\/([א-ת]+)/g,(m,a,b)=>{
+      if(sex==='m') return a;
+      return b.length>=3 ? b : a+b;   // long = full alternative word, short = suffix
+    })).join('');
+  }
+  function joinHe(arr){ return arr.length<2 ? arr.join('') : arr.slice(0,-1).join(', ')+' ו'+arr[arr.length-1]; }
+  const PREFIX={ 'נלווים':'מלווה ב', 'תסמינים':'מלווה ב', 'ממצאים':'ממצאים: ', 'מנגנון':'מנגנון: ',
+    'רקע':'רקע: ', 'רקע ותרופות':'רקע: ', 'גורמי סיכון':'גורמי סיכון: ', 'טריגרים':'טריגרים: ',
+    'סיבות אפשריות':'לציין: ', 'אישה בגיל פוריות':'', 'רקע כללי':'' };
+  function sentence(g, items){
+    if(!items.length) return '';
+    const pre=PREFIX[g.name]||'';
+    return pre ? pre+joinHe(items)+'.' : items.join(', ')+'.';
+  }
+  function compose(){
+    if(!cur||!st) return '';
+    let open=st.open||'';
+    const who=(st.sex?(st.sex==='m'?'גבר':'אישה'):'[גבר/אישה]')+(st.age!=null?(st.sex==='f'?' בת ':' בן ')+st.age:' [גיל]');
+    open=open.replace(/\[גבר\/אישה\]\s*\[גיל\]/g, who);
+    if(st.age!=null) open=open.replace(/\[גיל\]/g, String(st.age));
+    const parts=[conj(open.trim(),st.sex)];
+    cur.chips.concat([A.shared]).forEach(g=>{
+      const items=(st.sel[g.name]||[]).map(x=>conj(x,st.sex));
+      const sn=sentence(g,items); if(sn) parts.push(sn);
+    });
+    if(st.notes&&st.notes.trim()) parts.push(st.notes.trim());
+    return parts.filter(Boolean).join(' ').replace(/\.\./g,'.');
+  }
+  function render(){
+    out.value=compose();
+    sexSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.s===st.sex));
+    ageIn.value=st.age!=null?st.age:'';
+    ageChips.querySelectorAll('.chip').forEach(b=>b.classList.toggle('used', st.age!=null && Number(b.dataset.a)===st.age));
+    chipsEl.querySelectorAll('.chip').forEach(b=>{ b.textContent=conj(b.dataset.s,st.sex); b.classList.toggle('used',(st.sel[b.dataset.g]||[]).includes(b.dataset.s)); });
+    save();
+  }
+
+  /* --- drawer: section header + entry row --- */
   const sec=document.createElement('div'); sec.className='dsec'; sec.textContent='אנמנזה לפי אירוע'; dlist.appendChild(sec);
   const all=document.createElement('button'); all.className='row';
   all.innerHTML=`<span class="sw em">📋</span><span class="lbl">קיצורי אנמנזה<small>${A.types.length} סוגי אירוע · תבנית + משפטים מוכנים</small></span>`;
   all.onclick=()=>{ closeMenu(); showList(); }; dlist.appendChild(all);
 
-  // list screen
+  /* --- list screen --- */
   const hint=document.createElement('div'); hint.className='hint';
-  hint.textContent='לכל סוג אירוע: תבנית פתיחה למילוי ומשפטים קצרים להוספה בלחיצה. בסוף מעתיקים לדו"ח.';
+  hint.textContent='לכל סוג אירוע: מין וגיל, פתיחה למילוי ומשפטים קצרים שנכנסים למקום שלהם בדו"ח. בסוף מעתיקים.';
   list.appendChild(hint);
   A.types.forEach(t=>{
     const r=document.createElement('button'); r.className='row';
@@ -271,50 +359,52 @@ const rows=[...dlist.children];
     r.onclick=()=>showType(t); list.appendChild(r);
   });
 
-  function showList(){ cur=null; list.hidden=false; det.hidden=true;
+  /* --- age quick picks --- */
+  [1,5,10,18,25,35,45,55,65,75,85].forEach(a=>{
+    const b=document.createElement('button'); b.className='chip'; b.dataset.a=a; b.textContent=a;
+    b.onclick=()=>{ st.age=(st.age===a?null:a); render(); }; ageChips.appendChild(b);
+  });
+  ageIn.addEventListener('input',()=>{ const v=parseInt(ageIn.value,10); st.age=isNaN(v)?null:Math.max(0,Math.min(120,v)); render(); });
+  $('ageMinus').onclick=()=>{ st.age=Math.max(0,(st.age==null?30:st.age)-1); render(); };
+  $('agePlus').onclick=()=>{ st.age=Math.min(120,(st.age==null?30:st.age)+1); render(); };
+  sexSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ st.sex=(st.sex===b.dataset.s?null:b.dataset.s); render(); });
+  openEl.addEventListener('input',()=>{ st.open=openEl.value; render(); });
+  notesEl.addEventListener('input',()=>{ st.notes=notesEl.value; render(); });
+
+  function showList(){ cur=null; st=null; list.hidden=false; det.hidden=true;
     $('anamTitle').textContent='קיצורי אנמנזה'; $('anamSub').textContent='בחר סוג אירוע';
     anam.hidden=false; anam.querySelector('.abody').scrollTop=0; }
-  function hide(){ anam.hidden=true; cur=null; }
+  function hide(){ anam.hidden=true; cur=null; st=null; }
 
   function showType(t){
-    cur=t; list.hidden=true; det.hidden=false;
-    $('anamTitle').textContent=t.title; $('anamSub').textContent='תבנית + משפטים מוכנים';
-    const d=load(t); ta.value=(d!==null&&d!=='')?d:t.template;
+    cur=t; st=load(t); list.hidden=true; det.hidden=false;
+    $('anamTitle').textContent=t.title; $('anamSub').textContent='בחר מין, גיל ומשפטים';
+    openEl.value=st.open; notesEl.value=st.notes;
     chipsEl.innerHTML='';
     t.chips.concat([A.shared]).forEach(g=>{
-      const w=document.createElement('div'); w.className='cgrp';
-      w.innerHTML=`<div class="cname">${g.name}</div>`;
+      const w=document.createElement('div'); w.className='fld cgrp';
+      w.innerHTML=`<div class="flbl">${g.name}</div>`;
       const c=document.createElement('div'); c.className='chips';
       g.items.forEach(s=>{
-        const b=document.createElement('button'); b.className='chip'; b.textContent=s;
-        if(ta.value.includes(s)) b.classList.add('used');
-        b.onclick=()=>addPhrase(s,b);
+        const b=document.createElement('button'); b.className='chip'; b.textContent=s; b.dataset.g=g.name; b.dataset.s=s;
+        b.onclick=()=>{ const arr=st.sel[g.name]||(st.sel[g.name]=[]); const i=arr.indexOf(s); i>=0?arr.splice(i,1):arr.push(s); render(); };
         c.appendChild(b);
       });
       w.appendChild(c); chipsEl.appendChild(w);
     });
+    render();
     anam.hidden=false; anam.querySelector('.abody').scrollTop=0;
   }
-  function addPhrase(s,b){
-    let v=ta.value.replace(/\s+$/,'');
-    if(v && !/[.!?]$/.test(v)) v+='.';
-    ta.value=(v?v+' ':'')+s+'.';
-    b.classList.add('used'); save();
-  }
-  function markUsed(){ chipsEl.querySelectorAll('.chip').forEach(b=>b.classList.toggle('used', ta.value.includes(b.textContent))); }
-  ta.addEventListener('input',()=>{ save(); markUsed(); });
 
-  function toast(msg){ $('anamSub').textContent=msg; setTimeout(()=>{ if(cur) $('anamSub').textContent='תבנית + משפטים מוכנים'; },1500); }
+  function toast(msg){ $('anamSub').textContent=msg; setTimeout(()=>{ if(cur) $('anamSub').textContent='בחר מין, גיל ומשפטים'; },1500); }
   async function copyText(){
-    const v=ta.value;
+    const v=out.value;
     try{ if(navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(v); toast('הועתק ✓'); return; } }catch(e){}
-    try{ ta.focus(); ta.select(); document.execCommand('copy'); toast('הועתק ✓'); }catch(e){ toast('לא הצלחתי להעתיק'); }
+    try{ out.focus(); out.select(); document.execCommand('copy'); toast('הועתק ✓'); }catch(e){ toast('לא הצלחתי להעתיק'); }
   }
   $('anamCopy').onclick=copyText;
-  $('anamShare').onclick=async()=>{
-    if(navigator.share){ try{ await navigator.share({text:ta.value}); }catch(e){} } else copyText();
-  };
-  $('anamReset').onclick=()=>{ if(!cur) return; ta.value=cur.template; try{ localStorage.removeItem(key(cur)); }catch(e){} markUsed(); toast('אופס לתבנית'); };
+  $('anamShare').onclick=async()=>{ if(navigator.share){ try{ await navigator.share({text:out.value}); }catch(e){} } else copyText(); };
+  $('anamReset').onclick=()=>{ if(!cur) return; st=fresh(cur); openEl.value=st.open; notesEl.value=''; try{ localStorage.removeItem(KEY(cur)); }catch(e){} render(); toast('אופס'); };
   $('anamBack').onclick=()=>{ if(cur) showList(); else hide(); };
   window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!anam.hidden){ e.stopImmediatePropagation(); if(cur) showList(); else hide(); } },true);
 })();
