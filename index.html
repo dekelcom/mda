@@ -337,6 +337,22 @@ const rows=[...dlist.children];
     const pre=PREFIX[g.name]||'';
     return pre ? pre+joinHe(items)+'.' : items.join(', ')+'.';
   }
+  /* --- normal ranges by age (sex has no bearing on the standard field thresholds) --- */
+  function ageY(){ return st&&st.age!=null ? st.age : 30; }
+  function label(v,lo,hi,hiLabel){ return v<lo ? 'נמוך' : v>hi ? (hiLabel||'גבוה') : 'תקין'; }
+  function pulseLabel(v){ const a=ageY(); const [lo,hi]= a<1?[100,160] : a<3?[90,150] : a<6?[80,140] : a<13?[70,120] : [60,100]; return label(v,lo,hi); }
+  function bpLabel(bp){
+    const m=/^(\d+)\/(\d+)$/.exec(bp||''); if(!m) return null;
+    const sys=+m[1], dia=+m[2], a=ageY();
+    if(a<13){ const lo=a<1?60:70+2*a; return sys<lo ? 'נמוך' : sys>120 ? 'גבוה' : 'תקין'; }
+    if(sys<90) return 'נמוך';
+    if(sys>=180||dia>=120) return 'גבוה מאוד';
+    if(sys>=140||dia>=90) return 'גבוה';
+    if(sys>=120||dia>=80) return 'גבולי';
+    return 'תקין';
+  }
+  function gluLabel(v){ const a=ageY(); const lo=a<1?45:70; return v<lo ? 'נמוך' : v>200 ? 'גבוה' : v>140 ? 'מוגבר' : 'תקין'; }
+  function withLabel(txt,lab){ return lab ? txt+' ('+lab+')' : txt; }
   function compose(){
     if(!cur||!st) return '';
     let open=st.open||'';
@@ -348,12 +364,15 @@ const rows=[...dlist.children];
     cur.chips.concat([A.shared]).forEach(g=>{
       const items=(st.sel[g.name]||[]).map(x=>{
         x=conj(x,st.sex);
-        if(st.glu && /סוכר \[ערך\]/.test(x)){ x=x.replace(/סוכר \[ערך\]/,'סוכר '+st.glu); gluUsed=true; }
+        if(st.glu && /סוכר \[ערך\]/.test(x)){ x=x.replace(/סוכר \[ערך\]( תקין)?/, withLabel('סוכר '+st.glu, gluLabel(+st.glu))); gluUsed=true; }
         return x;
       });
       const sn=sentence(g,items); if(sn) parts.push(sn);
     });
-    const vit=[]; if(st.bp) vit.push('ל"ד '+st.bp); if(st.pulse) vit.push('דופק '+st.pulse); if(st.glu&&!gluUsed) vit.push('סוכר '+st.glu);
+    const vit=[];
+    if(st.bp) vit.push(withLabel('ל"ד '+st.bp, bpLabel(st.bp)));
+    if(st.pulse) vit.push(withLabel('דופק '+st.pulse, pulseLabel(+st.pulse)));
+    if(st.glu&&!gluUsed) vit.push(withLabel('סוכר '+st.glu, gluLabel(+st.glu)));
     if(vit.length) parts.push('מדדים: '+vit.join(', ')+'.');
     if(st.notes&&st.notes.trim()) parts.push(st.notes.trim());
     return parts.filter(Boolean).join(' ').replace(/\.\./g,'.');
