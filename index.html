@@ -173,6 +173,14 @@
     font-weight:800;text-align:center;outline:none;-webkit-user-select:text;user-select:text;-moz-appearance:textfield}
   .agebox input::-webkit-outer-spin-button,.agebox input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .agechips .chip{padding:6px 11px;font-size:12.5px}
+  .vitals{display:flex;gap:8px}
+  .vitals label{flex:1;display:flex;flex-direction:column;align-items:stretch;gap:4px;min-width:0}
+  .vitals span{font-size:11px;font-weight:700;color:var(--muted);text-align:center}
+  .vitals input{width:100%;height:44px;border:1px solid #3a2f27;border-radius:12px;background:#1c1611;color:var(--cream);
+    font:inherit;font-size:16px;font-weight:800;text-align:center;outline:none;-webkit-user-select:text;user-select:text;
+    -moz-appearance:textfield;direction:ltr}
+  .vitals input:focus{border-color:#a4131f}
+  .vitals input::-webkit-outer-spin-button,.vitals input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 </style>
 </head>
 <body>
@@ -228,6 +236,14 @@
             </div>
           </div>
           <div class="chips agechips" id="ageChips"></div>
+        </div>
+        <div class="fld">
+          <div class="flbl">מדדים</div>
+          <div class="vitals">
+            <label><span>ל"ד</span><input id="vBp" type="text" inputmode="numeric" placeholder="120/80"></label>
+            <label><span>דופק</span><input id="vPulse" type="number" inputmode="numeric" placeholder="80"></label>
+            <label><span>סוכר</span><input id="vGlu" type="number" inputmode="numeric" placeholder="100"></label>
+          </div>
         </div>
         <div class="fld">
           <div class="flbl">פתיחה <small>ניתן לערוך, סוגריים מרובעים הם שדות למילוי</small></div>
@@ -296,7 +312,8 @@ const rows=[...dlist.children];
   const openEl=$('anamOpen'), notesEl=$('anamNotes'), ageIn=$('ageIn'), sexSeg=$('sexSeg'), ageChips=$('ageChips');
   let cur=null, st=null;
   const KEY=t=>'anam-state-'+t.id;
-  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{}});
+  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:''});
+  const vBp=$('vBp'), vPulse=$('vPulse'), vGlu=$('vGlu');
   function load(t){ try{ const j=JSON.parse(localStorage.getItem(KEY(t))||'null'); if(j&&typeof j==='object') return Object.assign(fresh(t),j); }catch(e){} return fresh(t); }
   function save(){ if(cur&&st) try{ localStorage.setItem(KEY(cur),JSON.stringify(st)); }catch(e){} }
 
@@ -327,6 +344,8 @@ const rows=[...dlist.children];
     open=open.replace(/\[גבר\/אישה\]\s*\[גיל\]/g, who);
     if(st.age!=null) open=open.replace(/\[גיל\]/g, String(st.age));
     const parts=[conj(open.trim(),st.sex)];
+    const vit=[]; if(st.bp) vit.push('ל"ד '+st.bp); if(st.pulse) vit.push('דופק '+st.pulse); if(st.glu) vit.push('סוכר '+st.glu);
+    if(vit.length) parts.push('מדדים: '+vit.join(', ')+'.');
     cur.chips.concat([A.shared]).forEach(g=>{
       const items=(st.sel[g.name]||[]).map(x=>conj(x,st.sex));
       const sn=sentence(g,items); if(sn) parts.push(sn);
@@ -338,6 +357,7 @@ const rows=[...dlist.children];
     out.value=compose();
     sexSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.s===st.sex));
     ageIn.value=st.age!=null?st.age:'';
+    if(document.activeElement!==vBp) vBp.value=st.bp; if(document.activeElement!==vPulse) vPulse.value=st.pulse; if(document.activeElement!==vGlu) vGlu.value=st.glu;
     ageChips.querySelectorAll('.chip').forEach(b=>b.classList.toggle('used', st.age!=null && Number(b.dataset.a)===st.age));
     chipsEl.querySelectorAll('.chip').forEach(b=>{ b.textContent=conj(b.dataset.s,st.sex); b.classList.toggle('used',(st.sel[b.dataset.g]||[]).includes(b.dataset.s)); });
     save();
@@ -368,6 +388,9 @@ const rows=[...dlist.children];
   $('ageMinus').onclick=()=>{ st.age=Math.max(0,(st.age==null?30:st.age)-1); render(); };
   $('agePlus').onclick=()=>{ st.age=Math.min(120,(st.age==null?30:st.age)+1); render(); };
   sexSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ st.sex=(st.sex===b.dataset.s?null:b.dataset.s); render(); });
+  vBp.addEventListener('input',()=>{ st.bp=vBp.value.trim(); render(); });
+  vPulse.addEventListener('input',()=>{ st.pulse=vPulse.value.trim(); render(); });
+  vGlu.addEventListener('input',()=>{ st.glu=vGlu.value.trim(); render(); });
   openEl.addEventListener('input',()=>{ st.open=openEl.value; render(); });
   notesEl.addEventListener('input',()=>{ st.notes=notesEl.value; render(); });
 
