@@ -177,6 +177,11 @@
   .subname small{font-weight:500}
   .chip.sub{padding:6px 11px;font-size:12.5px;background:#241d18}
   .chip.sub.used{background:#a4131f;border-color:#a4131f}
+  .other{display:flex;gap:6px;flex:1 1 100%;min-width:0}
+  .other input{flex:1;min-width:0;height:34px;border:1px solid #3a2f27;border-radius:999px;background:#1c1611;color:var(--cream);
+    font:inherit;font-size:13px;padding:0 12px;outline:none;-webkit-user-select:text;user-select:text}
+  .other input:focus{border-color:#a4131f}
+  .other button{height:34px;border:none;border-radius:999px;background:#ffffff16;color:#fff;font-size:13px;font-weight:700;padding:0 12px;cursor:pointer}
   .vitals{display:flex;gap:8px}
   .vitals label{flex:1;display:flex;flex-direction:column;align-items:stretch;gap:4px;min-width:0}
   .vitals span{font-size:11px;font-weight:700;color:var(--muted);text-align:center}
@@ -226,6 +231,10 @@
             <button id="anamShare">שתף</button>
             <button id="anamReset">איפוס</button>
           </div>
+        </div>
+        <div class="fld" id="phBlock" hidden>
+          <div class="flbl">השלמת שדות <small>בחירה ממלאת את הסוגריים, תמיד אפשר למחוק ולכתוב בטקסט</small></div>
+          <div id="phRows"></div>
         </div>
         <div class="fld">
           <div class="flbl">מטופל</div>
@@ -312,7 +321,32 @@ const rows=[...dlist.children];
   const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:'',fill:{}});
   // options for a [placeholder] inside a phrase, by event type then global
   function optsFor(name){ const o=A.options||{}; return (o.byType&&o.byType[cur.id]&&o.byType[cur.id][name]) || (o.global&&o.global[name]) || null; }
-  function placeholderOf(phrase){ const m=/\[([^\]]+)\]/.exec(phrase); return m && optsFor(m[1]) ? m[1] : null; }
+  // options for any [placeholder] text: exact list by name, else "name: a, b", else "a / b", else "a, b", else none (free text only)
+  function optionsFor(name){
+    const exact=optsFor(name); if(exact) return exact;
+    let t=name; const i=t.indexOf(':'); if(i>0) t=t.slice(i+1);
+    if(t.includes(' / ')) return t.split(' / ').map(x=>x.trim()).filter(Boolean);
+    if(t.includes(',')) return t.split(',').map(x=>x.trim()).filter(Boolean);
+    if(name==='שעה'){ const d=new Date(), f=m=>{ const x=new Date(d-m*60000); return x.getHours().toString().padStart(2,'0')+':'+x.getMinutes().toString().padStart(2,'0'); }; return [f(0),f(15),f(30),f(60),f(120)]; }
+    return [];
+  }
+  function placeholderOf(phrase){ const m=/\[([^\]]+)\]/.exec(phrase); return m ? m[1] : null; }
+  function optionRow(name, chosen, onPick, onFree, title){
+    const row=document.createElement('div'); row.className='subrow';
+    row.innerHTML=`<div class="subname">${title}</div>`;
+    const c=document.createElement('div'); c.className='chips';
+    optionsFor(name).forEach(o=>{
+      const b=document.createElement('button'); b.className='chip sub'+(chosen.includes(o)?' used':''); b.textContent=conj(o,st.sex);
+      b.onclick=()=>onPick(o); c.appendChild(b);
+    });
+    const f=document.createElement('div'); f.className='other';
+    const inp=document.createElement('input'); inp.placeholder='אחר...'; inp.setAttribute('enterkeyhint','done');
+    const ok=document.createElement('button'); ok.textContent='✓';
+    const go=()=>{ const v=inp.value.trim(); if(v){ onFree(v); inp.value=''; } };
+    ok.onclick=go; inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } });
+    f.appendChild(inp); f.appendChild(ok); c.appendChild(f);
+    row.appendChild(c); return row;
+  }
   function fillPhrase(phrase){
     const vals=st.fill[phrase]; if(!vals||!vals.length) return phrase;
     return phrase.replace(/\[([^\]]+)\]/, joinHe(vals));
@@ -392,20 +426,23 @@ const rows=[...dlist.children];
     if(document.activeElement!==vBp) vBp.value=st.bp; if(document.activeElement!==vPulse) vPulse.value=st.pulse; if(document.activeElement!==vGlu) vGlu.value=st.glu;
     ageChips.querySelectorAll('.chip').forEach(b=>b.classList.toggle('used', st.age!=null && Number(b.dataset.a)===st.age));
     chipsEl.querySelectorAll('.chip:not(.sub)').forEach(b=>{ b.textContent=conj(b.dataset.s,st.sex); b.classList.toggle('used',(st.sel[b.dataset.g]||[]).includes(b.dataset.s)); });
+    // placeholders still open in the opening text (sex/age have their own controls)
+    const phRows=$('phRows'); phRows.innerHTML='';
+    const seen=new Set();
+    (st.open.match(/\[([^\]]+)\]/g)||[]).map(x=>x.slice(1,-1)).forEach(name=>{
+      if(name==='גבר/אישה'||name==='גיל'||seen.has(name)) return; seen.add(name);
+      const put=v=>{ st.open=st.open.replace('['+name+']', v); render(); };
+      phRows.appendChild(optionRow(name, [], put, put, '['+name+']'));
+    });
+    $('phBlock').hidden=!phRows.children.length;
+    // placeholders inside selected phrases
     chipsEl.querySelectorAll('.subwrap').forEach(w=>{
       w.innerHTML='';
       (st.sel[w.dataset.g]||[]).forEach(phrase=>{
         const name=placeholderOf(phrase); if(!name) return;
-        const row=document.createElement('div'); row.className='subrow';
-        row.innerHTML=`<div class="subname">${name}<small> ל"${conj(phrase,st.sex)}"</small></div>`;
-        const c=document.createElement('div'); c.className='chips';
         const chosen=st.fill[phrase]||[];
-        optsFor(name).forEach(o=>{
-          const b=document.createElement('button'); b.className='chip sub'+(chosen.includes(o)?' used':''); b.textContent=o;
-          b.onclick=()=>{ const arr=st.fill[phrase]||(st.fill[phrase]=[]); const i=arr.indexOf(o); i>=0?arr.splice(i,1):arr.push(o); render(); };
-          c.appendChild(b);
-        });
-        row.appendChild(c); w.appendChild(row);
+        const toggle=o=>{ const arr=st.fill[phrase]||(st.fill[phrase]=[]); const i=arr.indexOf(o); i>=0?arr.splice(i,1):arr.push(o); render(); };
+        w.appendChild(optionRow(name, chosen, toggle, toggle, `${name}<small> ל"${conj(phrase,st.sex)}"</small>`));
       });
     });
     save();
