@@ -181,7 +181,7 @@
     <div class="ahead">
       <button class="back" id="anamBack" aria-label="חזרה">→</button>
       <div style="flex:1;min-width:0">
-        <h2 id="anamTitle">אנמנזה לפי אירוע</h2>
+        <h2 id="anamTitle">קיצורי אנמנזה</h2>
         <div class="sub" id="anamSub">בחר סוג אירוע</div>
       </div>
     </div>
@@ -206,7 +206,7 @@
       <img class="cross" src="icons/logo.png" alt="מגן דוד אדום" />
       <div>
         <h1>כרטיס כיס לחובש</h1>
-        <p>מד״א · רפואת חירום · 10 כרטיסים + אנמנזה</p>
+        <p>מד״א · רפואת חירום · 10 כרטיסים + קיצורי אנמנזה</p>
       </div>
     </div>
     <div class="dlist" id="dlist"></div>
@@ -258,7 +258,7 @@ const rows=[...dlist.children];
   // drawer: section header + one row per event type
   const sec=document.createElement('div'); sec.className='dsec'; sec.textContent='אנמנזה לפי אירוע'; dlist.appendChild(sec);
   const all=document.createElement('button'); all.className='row';
-  all.innerHTML=`<span class="sw em">📋</span><span class="lbl">ספריית סניפטים<small>${A.types.length} סוגי אירוע · תבנית + משפטים מוכנים</small></span>`;
+  all.innerHTML=`<span class="sw em">📋</span><span class="lbl">קיצורי אנמנזה<small>${A.types.length} סוגי אירוע · תבנית + משפטים מוכנים</small></span>`;
   all.onclick=()=>{ closeMenu(); showList(); }; dlist.appendChild(all);
 
   // list screen
@@ -272,7 +272,7 @@ const rows=[...dlist.children];
   });
 
   function showList(){ cur=null; list.hidden=false; det.hidden=true;
-    $('anamTitle').textContent='אנמנזה לפי אירוע'; $('anamSub').textContent='בחר סוג אירוע';
+    $('anamTitle').textContent='קיצורי אנמנזה'; $('anamSub').textContent='בחר סוג אירוע';
     anam.hidden=false; anam.querySelector('.abody').scrollTop=0; }
   function hide(){ anam.hidden=true; cur=null; }
 
