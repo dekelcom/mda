@@ -173,6 +173,11 @@
     font-weight:800;text-align:center;outline:none;-webkit-user-select:text;user-select:text;-moz-appearance:textfield}
   .agebox input::-webkit-outer-spin-button,.agebox input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .agechips .chip{padding:6px 11px;font-size:12.5px}
+  .subrow{margin:4px 0 2px 0;padding:8px 10px;border-right:3px solid #a4131f;background:#ffffff08;border-radius:10px;display:flex;flex-direction:column;gap:6px}
+  .subname{font-size:11.5px;font-weight:700;color:var(--muted)}
+  .subname small{font-weight:500}
+  .chip.sub{padding:6px 11px;font-size:12.5px;background:#241d18}
+  .chip.sub.used{background:#a4131f;border-color:#a4131f}
   .vitals{display:flex;gap:8px}
   .vitals label{flex:1;display:flex;flex-direction:column;align-items:stretch;gap:4px;min-width:0}
   .vitals span{font-size:11px;font-weight:700;color:var(--muted);text-align:center}
@@ -312,7 +317,14 @@ const rows=[...dlist.children];
   const openEl=$('anamOpen'), notesEl=$('anamNotes'), ageIn=$('ageIn'), sexSeg=$('sexSeg'), ageChips=$('ageChips');
   let cur=null, st=null;
   const KEY=t=>'anam-state-'+t.id;
-  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:''});
+  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:'',fill:{}});
+  // options for a [placeholder] inside a phrase, by event type then global
+  function optsFor(name){ const o=A.options||{}; return (o.byType&&o.byType[cur.id]&&o.byType[cur.id][name]) || (o.global&&o.global[name]) || null; }
+  function placeholderOf(phrase){ const m=/\[([^\]]+)\]/.exec(phrase); return m && optsFor(m[1]) ? m[1] : null; }
+  function fillPhrase(phrase){
+    const vals=st.fill[phrase]; if(!vals||!vals.length) return phrase;
+    return phrase.replace(/\[([^\]]+)\]/, joinHe(vals));
+  }
   const vBp=$('vBp'), vPulse=$('vPulse'), vGlu=$('vGlu');
   function load(t){ try{ const j=JSON.parse(localStorage.getItem(KEY(t))||'null'); if(j&&typeof j==='object') return Object.assign(fresh(t),j); }catch(e){} return fresh(t); }
   function save(){ if(cur&&st) try{ localStorage.setItem(KEY(cur),JSON.stringify(st)); }catch(e){} }
@@ -325,7 +337,8 @@ const rows=[...dlist.children];
     // conjugate only outside [placeholders], so "[ריאתי/לבבי]" stays a fill-in choice
     return txt.split(/(\[[^\]]*\])/).map((seg,i)=> i%2 ? seg : seg.replace(/([א-ת]+)\/([א-ת]+)/g,(m,a,b)=>{
       if(sex==='m') return a;
-      return b.length>=3 ? b : a+b;   // long = full alternative word, short = suffix
+      if(b.length>=3) return b;        // long = full alternative word
+      return a.replace(/[ךםןףץ]$/,ch=>({'ך':'כ','ם':'מ','ן':'נ','ף':'פ','ץ':'צ'}[ch]))+b;   // short = suffix, un-final the last letter
     })).join('');
   }
   function joinHe(arr){ return arr.length<2 ? arr.join('') : arr.slice(0,-1).join(', ')+' ו'+arr[arr.length-1]; }
@@ -356,14 +369,14 @@ const rows=[...dlist.children];
   function compose(){
     if(!cur||!st) return '';
     let open=st.open||'';
-    const who=(st.sex?(st.sex==='m'?'גבר':'אישה'):'[גבר/אישה]')+(st.age!=null?(st.sex==='f'?' בת ':' בן ')+st.age:' [גיל]');
+    const who=(st.sex?(st.sex==='m'?'גבר':'אישה'):'[גבר/אישה]')+(st.sex?(st.sex==='f'?' בת ':' בן '):' ')+(st.age!=null?st.age:'[גיל]');
     open=open.replace(/\[גבר\/אישה\]\s*\[גיל\]/g, who);
     if(st.age!=null) open=open.replace(/\[גיל\]/g, String(st.age));
     const parts=[conj(open.trim(),st.sex)];
     let gluUsed=false;
     cur.chips.concat([A.shared]).forEach(g=>{
       const items=(st.sel[g.name]||[]).map(x=>{
-        x=conj(x,st.sex);
+        x=conj(fillPhrase(x),st.sex);
         if(st.glu && /סוכר \[ערך\]/.test(x)){ x=x.replace(/סוכר \[ערך\]( תקין)?/, withLabel('סוכר '+st.glu, gluLabel(+st.glu))); gluUsed=true; }
         return x;
       });
@@ -383,7 +396,23 @@ const rows=[...dlist.children];
     ageIn.value=st.age!=null?st.age:'';
     if(document.activeElement!==vBp) vBp.value=st.bp; if(document.activeElement!==vPulse) vPulse.value=st.pulse; if(document.activeElement!==vGlu) vGlu.value=st.glu;
     ageChips.querySelectorAll('.chip').forEach(b=>b.classList.toggle('used', st.age!=null && Number(b.dataset.a)===st.age));
-    chipsEl.querySelectorAll('.chip').forEach(b=>{ b.textContent=conj(b.dataset.s,st.sex); b.classList.toggle('used',(st.sel[b.dataset.g]||[]).includes(b.dataset.s)); });
+    chipsEl.querySelectorAll('.chip:not(.sub)').forEach(b=>{ b.textContent=conj(b.dataset.s,st.sex); b.classList.toggle('used',(st.sel[b.dataset.g]||[]).includes(b.dataset.s)); });
+    chipsEl.querySelectorAll('.subwrap').forEach(w=>{
+      w.innerHTML='';
+      (st.sel[w.dataset.g]||[]).forEach(phrase=>{
+        const name=placeholderOf(phrase); if(!name) return;
+        const row=document.createElement('div'); row.className='subrow';
+        row.innerHTML=`<div class="subname">${name}<small> ל"${conj(phrase,st.sex)}"</small></div>`;
+        const c=document.createElement('div'); c.className='chips';
+        const chosen=st.fill[phrase]||[];
+        optsFor(name).forEach(o=>{
+          const b=document.createElement('button'); b.className='chip sub'+(chosen.includes(o)?' used':''); b.textContent=o;
+          b.onclick=()=>{ const arr=st.fill[phrase]||(st.fill[phrase]=[]); const i=arr.indexOf(o); i>=0?arr.splice(i,1):arr.push(o); render(); };
+          c.appendChild(b);
+        });
+        row.appendChild(c); w.appendChild(row);
+      });
+    });
     save();
   }
 
@@ -439,7 +468,7 @@ const rows=[...dlist.children];
         b.onclick=()=>{ const arr=st.sel[g.name]||(st.sel[g.name]=[]); const i=arr.indexOf(s); i>=0?arr.splice(i,1):arr.push(s); render(); };
         c.appendChild(b);
       });
-      w.appendChild(c); chipsEl.appendChild(w);
+      w.appendChild(c); const sw=document.createElement('div'); sw.className='subwrap'; sw.dataset.g=g.name; w.appendChild(sw); chipsEl.appendChild(w);
     });
     render();
     anam.hidden=false; anam.querySelector('.abody').scrollTop=0;
