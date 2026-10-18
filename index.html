@@ -149,6 +149,9 @@
   .hit .cd{flex:1;font-size:14px;font-weight:600;line-height:1.3}
   .hit .ct{font-size:11px;color:var(--muted)}
   .hit.none{color:var(--muted);font-size:13px;justify-content:center}
+  #freqChips .chip{padding:9px 13px;font-size:14px}
+  #freqChips .chip small{color:var(--muted);font-weight:600;margin-right:4px}
+  .hit .cf{font-size:11px;color:var(--muted);flex:0 0 auto}
 
   .adetail{display:flex;flex-direction:column;gap:12px}
   .adetail textarea{width:100%;min-height:150px;resize:vertical;border:1px solid #3a2f27;border-radius:14px;
@@ -242,6 +245,8 @@
           <div class="flbl">קוד הזנקה</div>
           <input id="codeIn" type="text" inputmode="numeric" placeholder="הקלד קוד (למשל 5006) או שם אירוע" autocomplete="off" spellcheck="false">
           <div class="codehits" id="codeHits"></div>
+          <div class="flbl" style="margin-top:6px">הנפוצים בתחנה</div>
+          <div class="chips" id="freqChips"></div>
         </div>
       </div>
       <div class="adetail" id="anamDetail" hidden>
@@ -341,7 +346,9 @@ const rows=[...dlist.children];
   const KEY=t=>'anam-state-'+t.id;
   const fresh=t=>({sex:t.id==='birth'?'f':null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:'',fill:{},pick:{},code:null});
   const CODES=A.codes||[]; const typeById=id=>A.types.find(t=>t.id===id);
-  function codePrefix(){ if(!st||!st.code) return ''; const c=CODES.find(x=>x.c===st.code); return c ? 'קוד '+c.c+' - '+c.d+'. ' : ''; }
+  const codeKey=c=> c.c!=null ? String(c.c) : 'n:'+c.d;
+  const findCode=k=> CODES.find(x=>codeKey(x)===k);
+  function codePrefix(){ if(!st||!st.code) return ''; const c=findCode(st.code); if(!c) return ''; return c.c!=null ? 'קוד '+c.c+' - '+c.d+'. ' : 'הזנקה: '+c.d+'. '; }
   // apply picked values to the opening's [placeholders]; keeps the bracket in st.open so more values can be added later
   function applyPicks(txt){ Object.keys(st.pick||{}).forEach(n=>{ const v=st.pick[n]; if(v&&v.length) txt=txt.replace('['+n+']', joinHe(v)); }); return txt; }
   function unapplyPicks(txt){ Object.keys(st.pick||{}).forEach(n=>{ const v=st.pick[n]; if(v&&v.length) txt=txt.replace(joinHe(v), '['+n+']'); }); return txt; }
@@ -492,10 +499,16 @@ const rows=[...dlist.children];
   function searchCodes(q){
     q=norm(q.trim()); if(!q) return [];
     const isNum=/^\d+$/.test(q);
-    const hits=CODES.filter(c=> isNum ? String(c.c).startsWith(q) : norm(c.d).includes(q));
+    const hits=CODES.filter(c=> isNum ? (c.c!=null && String(c.c).startsWith(q)) : norm(c.d).includes(q));
+    hits.sort((a,b)=>(b.f||0)-(a.f||0) || (a.c||0)-(b.c||0));
     return hits.slice(0,8);
   }
-  function openCode(c){ const t=typeById(c.t)||typeById('generic'); codeIn.value=''; codeHits.innerHTML=''; showType(t, c.c); }
+  function openCode(c){ const t=typeById(c.t)||typeById('generic'); codeIn.value=''; codeHits.innerHTML=''; showType(t, codeKey(c)); }
+  // one-tap row of the station's most frequent dispatch types
+  const freqChips=$('freqChips');
+  CODES.filter(c=>c.f>0).sort((a,b)=>b.f-a.f).slice(0,10).forEach(c=>{
+    const b=document.createElement('button'); b.className='chip'; b.innerHTML=`${c.d}<small>${c.c!=null?c.c:''}</small>`; b.onclick=()=>openCode(c); freqChips.appendChild(b);
+  });
   codeIn.addEventListener('input',()=>{
     const q=codeIn.value; codeHits.innerHTML='';
     if(!q.trim()) return;
@@ -503,11 +516,11 @@ const rows=[...dlist.children];
     if(!hits.length){ const d=document.createElement('div'); d.className='hit none'; d.textContent='אין קוד מתאים'; codeHits.appendChild(d); return; }
     hits.forEach(c=>{
       const t=typeById(c.t); const b=document.createElement('button'); b.className='hit';
-      b.innerHTML=`<span class="cn">${c.c}</span><span class="cd">${c.d}<br><span class="ct">${t?t.title:''}</span></span>`;
+      b.innerHTML=`<span class="cn">${c.c!=null?c.c:'—'}</span><span class="cd">${c.d}<br><span class="ct">${t?t.title:''}</span></span>${c.f?`<span class="cf">${c.f}×</span>`:''}`;
       b.onclick=()=>openCode(c); codeHits.appendChild(b);
     });
     // exact numeric match with a single hit: open on Enter; auto-open when the typed code is complete and unique
-    if(hits.length===1 && String(hits[0].c)===q) openCode(hits[0]);
+    if(hits.length===1 && hits[0].c!=null && String(hits[0].c)===q) openCode(hits[0]);
   });
   codeIn.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const h=searchCodes(codeIn.value); if(h.length) openCode(h[0]); } });
   A.types.forEach(t=>{
@@ -557,8 +570,8 @@ const rows=[...dlist.children];
   function showType(t, code){
     cur=t; st=load(t); if(code){ if(st.code!==code){ st=fresh(t); st.code=code; } }
     list.hidden=true; det.hidden=false;
-    const cc=st.code?CODES.find(x=>x.c===st.code):null;
-    $('anamTitle').textContent=cc?('קוד '+cc.c+' · '+cc.d):t.title; $('anamSub').textContent=cc?('תבנית: '+t.title):'בחר מין, גיל ומשפטים';
+    const cc=st.code?findCode(st.code):null;
+    $('anamTitle').textContent=cc?(cc.c!=null?('קוד '+cc.c+' · '+cc.d):cc.d):t.title; $('anamSub').textContent=cc?('תבנית: '+t.title):'בחר מין, גיל ומשפטים';
     chipsEl.innerHTML='';
     t.chips.concat([A.shared]).forEach(g=>{
       const w=document.createElement('div'); w.className='fld cgrp';
