@@ -136,6 +136,19 @@
   .alist .row{padding:12px 8px}
   .alist .row .sw{background:#2a211b;font-size:19px}
   .alist .hint{font-size:12px;color:var(--muted);line-height:1.6;padding:4px 8px 10px}
+  .codebox{display:flex;flex-direction:column;gap:7px;padding:4px 4px 12px;border-bottom:1px solid #3a2f27;margin-bottom:8px}
+  .codebox input{height:50px;border:1px solid #4a3c32;border-radius:14px;background:#241d18;color:var(--cream);font:inherit;
+    font-size:18px;font-weight:800;text-align:center;outline:none;-webkit-user-select:text;user-select:text}
+  .codebox input:focus{border-color:#a4131f}
+  .codehits{display:flex;flex-direction:column;gap:4px}
+  .codehits:empty{display:none}
+  .hit{display:flex;align-items:center;gap:10px;border:none;background:#1c1611;color:var(--cream);border-radius:12px;
+    padding:10px 12px;text-align:right;cursor:pointer;font:inherit}
+  .hit:active{background:#ffffff14}
+  .hit .cn{font-weight:800;font-size:15px;min-width:44px;color:#fff;direction:ltr;text-align:left}
+  .hit .cd{flex:1;font-size:14px;font-weight:600;line-height:1.3}
+  .hit .ct{font-size:11px;color:var(--muted)}
+  .hit.none{color:var(--muted);font-size:13px;justify-content:center}
 
   .adetail{display:flex;flex-direction:column;gap:12px}
   .adetail textarea{width:100%;min-height:150px;resize:vertical;border:1px solid #3a2f27;border-radius:14px;
@@ -224,7 +237,13 @@
       </div>
     </div>
     <div class="abody">
-      <div class="alist" id="anamList"></div>
+      <div class="alist" id="anamList">
+        <div class="codebox">
+          <div class="flbl">קוד הזנקה</div>
+          <input id="codeIn" type="text" inputmode="numeric" placeholder="הקלד קוד (למשל 5006) או שם אירוע" autocomplete="off" spellcheck="false">
+          <div class="codehits" id="codeHits"></div>
+        </div>
+      </div>
       <div class="adetail" id="anamDetail" hidden>
         <div class="preview">
           <textarea id="anamText" spellcheck="false" rows="3"></textarea>
@@ -320,7 +339,9 @@ const rows=[...dlist.children];
   function autoGrow(){ out.style.height='auto'; out.style.height=(out.scrollHeight+2)+'px'; }
   let cur=null, st=null;
   const KEY=t=>'anam-state-'+t.id;
-  const fresh=t=>({sex:null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:'',fill:{},pick:{}});
+  const fresh=t=>({sex:t.id==='birth'?'f':null,age:null,open:t.template,notes:'',sel:{},bp:'',pulse:'',glu:'',fill:{},pick:{},code:null});
+  const CODES=A.codes||[]; const typeById=id=>A.types.find(t=>t.id===id);
+  function codePrefix(){ if(!st||!st.code) return ''; const c=CODES.find(x=>x.c===st.code); return c ? 'קוד '+c.c+' - '+c.d+'. ' : ''; }
   // apply picked values to the opening's [placeholders]; keeps the bracket in st.open so more values can be added later
   function applyPicks(txt){ Object.keys(st.pick||{}).forEach(n=>{ const v=st.pick[n]; if(v&&v.length) txt=txt.replace('['+n+']', joinHe(v)); }); return txt; }
   function unapplyPicks(txt){ Object.keys(st.pick||{}).forEach(n=>{ const v=st.pick[n]; if(v&&v.length) txt=txt.replace(joinHe(v), '['+n+']'); }); return txt; }
@@ -398,7 +419,7 @@ const rows=[...dlist.children];
   function gluLabel(v){ return v<70 ? 'נמוך, שים לב, חשד להיפוגליקמיה' : v>224 ? 'גבוה, שים לב, חשד להיפרגליקמיה' : v>140 ? 'מוגבר' : 'תקין'; }
   function withLabel(txt,lab){ return lab ? txt+' ('+lab+')' : txt; }
   function whoStr(){ return (st.sex?(st.sex==='m'?'גבר':'אישה'):'[גבר/אישה]')+(st.sex?(st.sex==='f'?' בת ':' בן '):' ')+(st.age!=null?st.age:'[גיל]'); }
-  function compose(){ const c=composeParts(); return c.open+(c.gen?' '+c.gen:''); }
+  function compose(){ const c=composeParts(); return codePrefix()+c.open+(c.gen?' '+c.gen:''); }
   function composeParts(){
     if(!cur||!st) return '';
     let open=st.open||'';
@@ -458,13 +479,37 @@ const rows=[...dlist.children];
   /* --- drawer: section header + entry row --- */
   const sec=document.createElement('div'); sec.className='dsec'; sec.textContent='אנמנזה לפי אירוע'; dlist.appendChild(sec);
   const all=document.createElement('button'); all.className='row';
-  all.innerHTML=`<span class="sw em">📋</span><span class="lbl">קיצורי אנמנזה<small>${A.types.length} סוגי אירוע · תבנית + משפטים מוכנים</small></span>`;
+  all.innerHTML=`<span class="sw em">📋</span><span class="lbl">קיצורי אנמנזה<small>לפי קוד הזנקה · ${A.types.length} תבניות</small></span>`;
   all.onclick=()=>{ closeMenu(); showList(); }; dlist.appendChild(all);
 
   /* --- list screen --- */
   const hint=document.createElement('div'); hint.className='hint';
-  hint.textContent='לכל סוג אירוע: מין וגיל, פתיחה למילוי ומשפטים קצרים שנכנסים למקום שלהם בדו"ח. בסוף מעתיקים.';
+  hint.textContent='או בחר תבנית ישירות:';
   list.appendChild(hint);
+  /* --- dispatch code search --- */
+  const codeIn=$('codeIn'), codeHits=$('codeHits');
+  function norm(x){ return (x||'').toString().replace(/["'׳״]/g,'').toLowerCase(); }
+  function searchCodes(q){
+    q=norm(q.trim()); if(!q) return [];
+    const isNum=/^\d+$/.test(q);
+    const hits=CODES.filter(c=> isNum ? String(c.c).startsWith(q) : norm(c.d).includes(q));
+    return hits.slice(0,8);
+  }
+  function openCode(c){ const t=typeById(c.t)||typeById('generic'); codeIn.value=''; codeHits.innerHTML=''; showType(t, c.c); }
+  codeIn.addEventListener('input',()=>{
+    const q=codeIn.value; codeHits.innerHTML='';
+    if(!q.trim()) return;
+    const hits=searchCodes(q);
+    if(!hits.length){ const d=document.createElement('div'); d.className='hit none'; d.textContent='אין קוד מתאים'; codeHits.appendChild(d); return; }
+    hits.forEach(c=>{
+      const t=typeById(c.t); const b=document.createElement('button'); b.className='hit';
+      b.innerHTML=`<span class="cn">${c.c}</span><span class="cd">${c.d}<br><span class="ct">${t?t.title:''}</span></span>`;
+      b.onclick=()=>openCode(c); codeHits.appendChild(b);
+    });
+    // exact numeric match with a single hit: open on Enter; auto-open when the typed code is complete and unique
+    if(hits.length===1 && String(hits[0].c)===q) openCode(hits[0]);
+  });
+  codeIn.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const h=searchCodes(codeIn.value); if(h.length) openCode(h[0]); } });
   A.types.forEach(t=>{
     const r=document.createElement('button'); r.className='row';
     r.innerHTML=`<span class="sw">${t.icon}</span><span class="lbl">${t.title}<small>${t.chips.length} קבוצות משפטים</small></span>`;
@@ -489,7 +534,8 @@ const rows=[...dlist.children];
   vGlu.addEventListener('input',()=>{ st.glu=vGlu.value.trim(); render(); });
   // editing the report: if the generated tail is intact, the edit is in the opening; otherwise the whole text becomes the opening
   out.addEventListener('input',()=>{
-    const v=out.value, c=composeParts();
+    let v=out.value; const c=composeParts(); const pre=codePrefix();
+    if(pre && v.startsWith(pre)) v=v.slice(pre.length); else if(pre){ st.code=null; }
     let open;
     if(c.gen && v.trimEnd().endsWith(c.gen)) open=v.trimEnd().slice(0,-c.gen.length).trimEnd();
     else if(!c.gen) open=v;
@@ -505,12 +551,14 @@ const rows=[...dlist.children];
 
   function showList(){ cur=null; st=null; list.hidden=false; det.hidden=true;
     $('anamTitle').textContent='קיצורי אנמנזה'; $('anamSub').textContent='בחר סוג אירוע';
-    anam.hidden=false; anam.querySelector('.abody').scrollTop=0; }
+    anam.hidden=false; anam.querySelector('.abody').scrollTop=0; codeIn.value=''; codeHits.innerHTML=''; }
   function hide(){ anam.hidden=true; cur=null; st=null; }
 
-  function showType(t){
-    cur=t; st=load(t); list.hidden=true; det.hidden=false;
-    $('anamTitle').textContent=t.title; $('anamSub').textContent='בחר מין, גיל ומשפטים';
+  function showType(t, code){
+    cur=t; st=load(t); if(code){ if(st.code!==code){ st=fresh(t); st.code=code; } }
+    list.hidden=true; det.hidden=false;
+    const cc=st.code?CODES.find(x=>x.c===st.code):null;
+    $('anamTitle').textContent=cc?('קוד '+cc.c+' · '+cc.d):t.title; $('anamSub').textContent=cc?('תבנית: '+t.title):'בחר מין, גיל ומשפטים';
     chipsEl.innerHTML='';
     t.chips.concat([A.shared]).forEach(g=>{
       const w=document.createElement('div'); w.className='fld cgrp';
@@ -527,7 +575,7 @@ const rows=[...dlist.children];
     anam.hidden=false; anam.querySelector('.abody').scrollTop=0; requestAnimationFrame(autoGrow);
   }
 
-  function toast(msg){ $('anamSub').textContent=msg; setTimeout(()=>{ if(cur) $('anamSub').textContent='בחר מין, גיל ומשפטים'; },1500); }
+  function toast(msg){ $('anamSub').textContent=msg; setTimeout(()=>{ if(cur) $('anamSub').textContent=(st&&st.code)?('תבנית: '+cur.title):'בחר מין, גיל ומשפטים'; },1500); }
   async function copyText(){
     const v=out.value;
     try{ if(navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(v); toast('הועתק ✓'); return; } }catch(e){}
@@ -535,7 +583,7 @@ const rows=[...dlist.children];
   }
   $('anamCopy').onclick=copyText;
   $('anamShare').onclick=async()=>{ if(navigator.share){ try{ await navigator.share({text:out.value}); }catch(e){} } else copyText(); };
-  $('anamReset').onclick=()=>{ if(!cur) return; if(!confirm('למחוק את האנמנזה של "'+cur.title+'" ולהתחיל מחדש?')) return; st=fresh(cur); try{ localStorage.removeItem(KEY(cur)); }catch(e){} render(); toast('אופס'); };
+  $('anamReset').onclick=()=>{ if(!cur) return; if(!confirm('למחוק את האנמנזה של "'+cur.title+'" ולהתחיל מחדש?')) return; const keep=st.code; st=fresh(cur); st.code=keep; try{ localStorage.removeItem(KEY(cur)); }catch(e){} render(); toast('אופס'); };
   $('anamBack').onclick=()=>{ if(cur) showList(); else hide(); };
   window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!anam.hidden){ e.stopImmediatePropagation(); if(cur) showList(); else hide(); } },true);
 })();
